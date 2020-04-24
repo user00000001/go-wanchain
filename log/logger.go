@@ -3,6 +3,8 @@ package log
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/go-stack/stack"
@@ -23,6 +25,8 @@ const (
 	LvlDebug
 	LvlTrace
 )
+
+const substr string = "github.com/wanchain/go-wanchain/"
 
 // Aligned returns a 5-character string containing the name of a Lvl.
 func (l Lvl) AlignedString() string {
@@ -127,6 +131,34 @@ type logger struct {
 }
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}) {
+	var calldeep int = 2
+	fnPC, fn, fl, ok := runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		msg = fmt.Sprintf("%s:%d::%s %s", fn, fl, fnN, msg)
+	}
+	calldeep++
+	fnPC, fn, fl, ok = runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		msg = fmt.Sprintf("%s:%d::%s===>===%s", fn, fl, fnN, msg)
+	}
 	l.h.Log(&Record{
 		Time: time.Now(),
 		Lvl:  lvl,

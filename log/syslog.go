@@ -5,8 +5,11 @@ package log
 import (
 	"errors"
 	"fmt"
-	"github.com/wanchain/go-wanchain/event"
 	"log/syslog"
+	"runtime"
+	"strings"
+
+	"github.com/wanchain/go-wanchain/event"
 )
 
 type SyslogFun func(m string) error
@@ -27,28 +30,28 @@ const (
 )
 
 type LogInfo struct {
-	Lvl syslog.Priority	`json:"level"`
-	Msg string			`json:"msg"`
+	Lvl syslog.Priority `json:"level"`
+	Msg string          `json:"msg"`
 }
 
 type SyslogSetting struct {
-	net string
-	svr string
+	net   string
+	svr   string
 	level string
-	tag string
+	tag   string
 }
 
 type Syslogger struct {
-	writer *syslog.Writer
+	writer    *syslog.Writer
 	threshold syslog.Priority
-	setting *SyslogSetting
+	setting   *SyslogSetting
 	dialTimes uint64
 
-	alarmFeed    event.Feed
-	scope        event.SubscriptionScope
+	alarmFeed event.Feed
+	scope     event.SubscriptionScope
 
-	warnCount	uint64
-	wrongCount	uint64
+	warnCount  uint64
+	wrongCount uint64
 }
 
 var (
@@ -83,7 +86,7 @@ func InitSyslog(net, svr, level, tag string) error {
 		syslogger.threshold = syslog.LOG_DEBUG
 	}
 
-	syslogger.setting = &SyslogSetting {
+	syslogger.setting = &SyslogSetting{
 		net,
 		svr,
 		level,
@@ -163,7 +166,6 @@ func GetWarnAndWrongLogCount() (uint64, uint64) {
 	return syslogger.warnCount, syslogger.wrongCount
 }
 
-
 func writeSyslog(level syslog.Priority, a ...interface{}) {
 	var sfunc SyslogFun
 	var lfunc LocallogFun
@@ -240,6 +242,34 @@ func writeSyslog(level syslog.Priority, a ...interface{}) {
 		}
 	}
 
+	var calldeep int = 2
+	fnPC, fn, fl, ok := runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		p[0] = fmt.Sprintf("%s:%d::%s %s", fn, fl, fnN, p[0])
+	}
+	calldeep++
+	fnPC, fn, fl, ok = runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		p[0] = fmt.Sprintf("%s:%d::%s===>===%s", fn, fl, fnN, p[0])
+	}
 	logStr := fmt.Sprint(p...)
 	if level <= syslog.LOG_CRIT {
 		go syslogger.alarmFeed.Send(LogInfo{level, logStr})
@@ -252,7 +282,6 @@ func writeSyslog(level syslog.Priority, a ...interface{}) {
 		}
 	}
 }
-
 
 func SubscribeAlarm(ch chan<- LogInfo) event.Subscription {
 	return syslogger.scope.Track(syslogger.alarmFeed.Subscribe(ch))

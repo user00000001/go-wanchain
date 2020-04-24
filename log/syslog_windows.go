@@ -4,6 +4,9 @@ package log
 
 import (
 	"fmt"
+	"runtime"
+	"strings"
+
 	"github.com/wanchain/go-wanchain/event"
 )
 
@@ -25,12 +28,12 @@ const (
 )
 
 type LogInfo struct {
-	Lvl uint32	`json:"level"`
-	Msg string			`json:"msg"`
+	Lvl uint32 `json:"level"`
+	Msg string `json:"msg"`
 }
 
 type Syslogger struct {
-	scope        event.SubscriptionScope
+	scope event.SubscriptionScope
 }
 
 var (
@@ -125,6 +128,34 @@ func writeSyslog(level uint32, a ...interface{}) {
 		}
 	}
 
+	var calldeep int = 2
+	fnPC, fn, fl, ok := runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		p[0] = fmt.Sprintf("%s:%d::%s %s", fn, fl, fnN, p[0])
+	}
+	calldeep++
+	fnPC, fn, fl, ok = runtime.Caller(calldeep)
+	if ok {
+		fnI := strings.LastIndex(fn, substr)
+		fnN := runtime.FuncForPC(fnPC).Name()
+		fnNI := strings.LastIndex(fnN, substr)
+		if fnI >= 0 {
+			fn = fn[fnI+len(substr):]
+		}
+		if fnNI >= 0 {
+			fnN = fnN[fnNI+len(substr):]
+		}
+		p[0] = fmt.Sprintf("%s:%d::%s===>===%s", fn, fl, fnN, p[0])
+	}
 	logStr := fmt.Sprint(p...)
 	lfunc(logStr)
 }
@@ -132,7 +163,6 @@ func writeSyslog(level uint32, a ...interface{}) {
 func SubscribeAlarm(ch chan<- LogInfo) event.Subscription {
 	return syslogger.scope.Track(new(event.Feed).Subscribe(ch))
 }
-
 
 func GetWarnAndWrongLogCount() (uint64, uint64) {
 	return 0, 0
